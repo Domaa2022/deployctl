@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
+	"github.com/Domaa2022/deployctl/internal/history"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/spf13/cobra"
@@ -29,11 +31,14 @@ var deployCmd = &cobra.Command{
 
 		// Paso 1: descargar imagen
 		fmt.Printf("⬇  Pulling image %s...\n", imagen)
-		_, err = cli.ImagePull(ctx, imagen, client.ImagePullOptions{})
+		reader, err := cli.ImagePull(ctx, imagen, client.ImagePullOptions{})
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error pulling image:", err)
 			os.Exit(1)
 		}
+		// leer la respuesta hasta el final para esperar que termine el pull
+		io.Copy(io.Discard, reader)
+		reader.Close()
 		fmt.Println("✓  Image pulled")
 
 		// Paso 2: detener y eliminar contenedor anterior si existe
@@ -59,6 +64,10 @@ var deployCmd = &cobra.Command{
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error starting container:", err)
 			os.Exit(1)
+		}
+
+		if err := history.Add(nombre, imagen); err != nil {
+			fmt.Fprintln(os.Stderr, "Warning: could not save history:", err)
 		}
 
 		fmt.Printf("✓  Container '%s' deployed successfully\n", nombre)
