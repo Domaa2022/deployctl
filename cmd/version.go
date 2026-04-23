@@ -10,7 +10,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the deployctl version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("deployctl v0.1.0")
+		fmt.Println("deployctl v0.2.0")
 	},
 }
 
