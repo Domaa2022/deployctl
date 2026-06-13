@@ -6,19 +6,49 @@ import (
 	"io"
 	"os"
 
-	"github.com/Domaa2022/deployctl/internal/history"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/spf13/cobra"
+
+	"github.com/Domaa2022/deployctl/internal/config"
+	"github.com/Domaa2022/deployctl/internal/history"
 )
 
 var deployCmd = &cobra.Command{
 	Use:   "deploy [nombre] [imagen]",
 	Short: "Deploy a Docker container",
-	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		nombre := args[0]
-		imagen := args[1]
+		var nombre, imagen string
+
+		// leer el flag --env
+		env, _ := cmd.Flags().GetString("env")
+
+		if env != "" {
+			// modo config: leer de deployctl.yaml
+			cfg, err := config.Load()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error loading config:", err)
+				os.Exit(1)
+			}
+
+			e, err := cfg.GetEnvironment(env)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error:", err)
+				os.Exit(1)
+			}
+
+			nombre = e.Name
+			imagen = e.Image
+		} else {
+			// modo manual: requiere dos argumentos
+			if len(args) < 2 {
+				fmt.Fprintln(os.Stderr, "Usage: deployctl deploy [nombre] [imagen]")
+				fmt.Fprintln(os.Stderr, "       deployctl deploy --env [dev|staging|prod]")
+				os.Exit(1)
+			}
+			nombre = args[0]
+			imagen = args[1]
+		}
 
 		cli, err := client.NewClientWithOpts(client.FromEnv)
 		if err != nil {
@@ -36,12 +66,11 @@ var deployCmd = &cobra.Command{
 			fmt.Fprintln(os.Stderr, "Error pulling image:", err)
 			os.Exit(1)
 		}
-		// leer la respuesta hasta el final para esperar que termine el pull
 		io.Copy(io.Discard, reader)
 		reader.Close()
 		fmt.Println("✓  Image pulled")
 
-		// Paso 2: detener y eliminar contenedor anterior si existe
+		// Paso 2: detener y eliminar contenedor anterior
 		fmt.Printf("⏹  Stopping existing container '%s'...\n", nombre)
 		_, _ = cli.ContainerStop(ctx, nombre, client.ContainerStopOptions{})
 		_, _ = cli.ContainerRemove(ctx, nombre, client.ContainerRemoveOptions{})
@@ -66,6 +95,7 @@ var deployCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Paso 4: guardar en historial
 		if err := history.Add(nombre, imagen); err != nil {
 			fmt.Fprintln(os.Stderr, "Warning: could not save history:", err)
 		}
@@ -77,4 +107,5 @@ var deployCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(deployCmd)
+	deployCmd.Flags().String("env", "", "Environment to deploy (dev|staging|prod)")
 }

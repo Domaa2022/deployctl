@@ -1,0 +1,10 @@
+environments:
+  dev:
+    name: mi-nginx-dev
+    image: nginx:latest
+  staging:
+    name: mi-nginx-staging
+    image: nginx:1.25
+  prod:
+    name: mi-nginx-prod
+    image: nginx:1.24
